@@ -1,0 +1,41 @@
+{
+  "name": "systema",
+  "version": "0.0.1",
+  "description": "A different kind of module loader",
+  "main": "dist/cjs/index.js",
+  "module": "dist/esm/index.js",
+  "browser": "dist/umd/index.js",
+  "typings": "dist/esm/index.d.ts",
+  "scripts": {
+    "tsc": "tsc",
+    "prepublish": "tsc -p src"
+  },
+  "author": "Juha Järvi",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/charto/systema.git"
+  },
+  "bugs": {
+    "url": "https://github.com/charto/systema/issues"
+  },
+  "homepage": "https://github.com/charto/systema#readme",
+  "keywords": [
+    "amd",
+    "cjs",
+    "loader",
+    "require",
+    "requirejs",
+    "system",
+    "systemjs"
+  ],
+  "devDependencies": {
+    "@types/node": "^11.11.3",
+    "source-map": "^0.7.3",
+    "source-map-support": "^0.5.11",
+    "typescript": "^3.4"
+  },
+  "dependencies": {
+    "tslib": "^1.9.3"
+  }
+}
