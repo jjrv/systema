@@ -1,5 +1,43 @@
 # systema internals
 
+## Philosophy
+
+The JavaScript ecosystem is infested with bloat. Run-time bloat from
+carelessly added dependencies make web pages and apps load and run slower.
+Complicated toolchains and development dependencies make JavaScript as a
+language less approachable and painful especially to new programmers and those
+with a background in other languages.
+
+JavaScript is a thing of beauty. It's Scheme with a C-like syntax. It's
+extremely powerful, with built-in support for GPU shaders, cameras,
+touchscreens and gyroscopes, C++ bindings and much more. It's dynamic but JIT
+compiled and optimized to the hilt by all the biggest tech companies working
+together, sparing no expense to make even badly written code run fast (if not
+too bloated). Probably most people you know have a device that easily runs it.
+
+In the early 80s you used to turn on a home computer and start writing what
+could be called programming instructions, even to load a game from disk or
+more concretely to copy its source code printed in a magazine. In the early
+2000s computer users no longer had to ever see any program code, but they could
+open up a text editor, write JavaScript in the most modern style of the day,
+and have it run with what they already had installed.
+
+How things have changed. Today even a seasoned programmer can read a dozen
+articles and still have little clue how to get started with writing a new
+modern JavaScript web app, especially while following good style and
+conventions.
+
+Systema combines the best aspects of today's JavaScript with the minimal
+(read: non-existent) toolchain requirements it used to have. With zero bloat.
+Everything you need, you already have installed. Systema is one small script
+infused with magic, that you mention in your code to have it run completely
+in your browser, not the cloud.
+
+All necessary online resources for more advanced tooling and libraries are
+loaded transparently from static files. Several CDNs are falling over each
+other competing to host them for free, we couldn't stop them even if we wanted
+to. Of course, the end result is easy to run offline, share or host yourself.
+
 ## The import process
 
 The loader is based on plugins for different "file formats" which can also
