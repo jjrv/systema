@@ -12,8 +12,11 @@
   "scripts": {
     "tsc": "tsc",
     "start": "./serve.bat",
-    "prepublish": "tsc -p src && tsc -p src/tsconfig.esm.json && (checkver lt 5.0.0 || rollup -c) && uglifyjs dist/umd/index.js -c -m > dist/umd/index.min.js",
-    "test": "node bin/systema ./test/test.ts"
+    "prepublish": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json && (checkver lt 5.0.0 || rollup -c) && uglifyjs dist/umd/index.js -c -m > dist/umd/index.min.js",
+    "example": "node bin/systema ./example/example.ts",
+    "lint": "exit 0; ./node_modules/.bin/tslint -c tslint.json \"test/**/*.ts\" \"src/**/*.ts\"",
+    "test": "nyc --extension .ts npm run test:no-spec | tap-spec && nyc report --reporter=text-lcov > coverage.lcov",
+    "test:no-spec": "NODE_ENV=test ts-node --files -r tsconfig-paths/register node_modules/tape/bin/tape test/**/*.test.ts"
   },
   "author": "Juha Järvi",
   "license": "MIT",
@@ -35,9 +38,16 @@
     "systemjs"
   ],
   "devDependencies": {
+    "@types/blue-tape": "^0.1.32",
     "@types/node": "^11.11.3",
     "autoroll": "^0.2.0",
+    "blue-tape": "^1.0.0",
+    "nyc": "^14.1.0",
     "rollup": "^1.6.0",
+    "tap-spec": "^5.0.0",
+    "ts-node": "^8.1.0",
+    "tsconfig-paths": "^3.8.0",
+    "tslint": "^5.16.0",
     "typescript": "^3.4",
     "uglify-js": "^3.5.1"
   },
