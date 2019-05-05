@@ -13,7 +13,7 @@
     "tsc": "tsc",
     "start": "./serve.bat",
     "prepublish": "tsc -p tsconfig.json && tsc -p tsconfig.esm.json && (checkver lt 5.0.0 || rollup -c) && uglifyjs dist/umd/index.js -c -m > dist/umd/index.min.js",
-    "example": "node bin/systema ./example/example.ts",
+    "example": "node bin/systema ./example/node-target.ts",
     "lint": "exit 0; ./node_modules/.bin/tslint -c tslint.json \"test/**/*.ts\" \"src/**/*.ts\"",
     "test": "nyc --extension .ts npm run test:no-spec | tap-spec && nyc report --reporter=text-lcov > coverage.lcov",
     "test:no-spec": "NODE_ENV=test ts-node --files -r tsconfig-paths/register node_modules/tape/bin/tape test/**/*.test.ts"

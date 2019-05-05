@@ -1,3 +1,3 @@
-import * as fibonacci from 'fibonacci';
+import { System } from '../src';
 
-console.log(fibonacci.iterate(3000));
+System.import('./node-target.ts');
