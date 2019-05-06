@@ -213,7 +213,7 @@ function parseSyntax(reToken: RegExp, state: TranslateState, handler: any) {
 				pos = last + token.length;
 
 				// Ensure token is not part of a longer token (surrounding
-				// characters are invalid in keyword and identifier names).
+				// characters should be invalid in keyword and identifier names).
 				if(
 					(sep[text.charAt(last - 1)] || !last) &&
 					(sep[text.charAt(pos)] || pos >= text.length)
@@ -266,6 +266,7 @@ function guessFormat(token: string, state: TranslateState) {
 		const text = state.text;
 		const last = state.last!;
 		const len = Math.min(last, chunkSize);
+
 		// Get some input immediately before and after the token,
 		// for quickly testing regexp matches.
 		const chunkAfter = text.substr(state.pos!, chunkSize);
@@ -484,6 +485,8 @@ export class JS extends Loader {
 				}
 			}
 		});
+
+		// Apply patches from conditional compilation.
 
 		if(patches.length) {
 			let result = '';

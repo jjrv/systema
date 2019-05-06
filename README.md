@@ -1,5 +1,10 @@
 # systema
 
+[![npm version](https://img.shields.io/npm/v/systema.svg)](https://www.npmjs.com/package/systema)
+[![dependency status](https://david-dm.org/jjrv/systema.svg)](https://david-dm.org/jjrv/systema)
+[![install size](https://img.shields.io/bundlephobia/min/systema.svg)](https://bundlephobia.com/result?p=systema)
+[![license](https://img.shields.io/npm/l/systema.svg)](https://raw.githubusercontent.com/jjrv/systema/master/LICENSE)
+
 `systema` is a zero-configuration module loader for browsers and Node.js.
 It allows modern JavaScript and TypeScript development without requiring other tooling, even Node.js.
 
