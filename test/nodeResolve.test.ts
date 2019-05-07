@@ -8,5 +8,5 @@ test(async (t: any) => {
 
     const out = getRepoPaths(loader, 'libzim');
     console.log(out);
-    t.ok();
+    t.ok(true);
 });

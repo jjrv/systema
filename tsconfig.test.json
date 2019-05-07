@@ -1,8 +1,6 @@
 {
 	"compileOnSave": true,
 	"compilerOptions": {
-		"declaration": true,
-		"declarationDir": "../dist/esm",
 		"importHelpers": true,
 		"lib": [
 			"dom",
@@ -14,14 +12,14 @@
 		"moduleResolution": "node",
 		"noImplicitAny": true,
 		"noImplicitThis": true,
-		"outDir": "dist/cjs",
+		"outDir": "dist/test",
 		"removeComments": false,
 		"sourceMap": false,
 		"strictFunctionTypes": true,
 		"strictNullChecks": true,
 		"target": "es5"
 	},
-	"files": [
-		"src/index.ts"
+	"include": [
+		"test/**/*.ts"
 	]
 }
