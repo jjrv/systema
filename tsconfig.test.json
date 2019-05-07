@@ -1,0 +1,25 @@
+{
+	"compileOnSave": true,
+	"compilerOptions": {
+		"importHelpers": true,
+		"lib": [
+			"dom",
+			"es5",
+			"es2015.collection",
+			"es2015.promise"
+		],
+		"module": "commonjs",
+		"moduleResolution": "node",
+		"noImplicitAny": true,
+		"noImplicitThis": true,
+		"outDir": "dist/test",
+		"removeComments": false,
+		"sourceMap": false,
+		"strictFunctionTypes": true,
+		"strictNullChecks": true,
+		"target": "es5"
+	},
+	"include": [
+		"test/**/*.ts"
+	]
+}
