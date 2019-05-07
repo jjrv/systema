@@ -16,7 +16,7 @@ for(let c of '\t\n\r !"#%&\'()*+,-./:;<=>?@[\\]^`{|}~'.split('')) {
   * @param keywords Separated by pipe characters, may use regexp syntax. */
 
 function matchTokens(keywords: string) {
-	return(new RegExp('["\'`{}]|\/[*/]?|' + keywords, 'g'));
+	return(new RegExp('["\'`{}()]|\/[*/]?|' + keywords, 'g'));
 }
 
 /** Match a function call with a non-numeric literal as the first argument. */
@@ -46,13 +46,33 @@ const reBeforeRegExp = /(^|[!%&(*+,-/:;<=>?\[^{|}~])\s*(return\s*)?$/;
 /** Match a hashbang header line used to make JS files executable in *nix systems. */
 const reHashBang = /^\ufeff?#![^\r\n]*/;
 
+/** Match any potential function call or assignment, including suspicious comments before parens. */
+const reCallAssign = /(\*\/|[^\t\n\r !"#%&'(*+,-./:;<=>?@[\\^`{|~])\s*\(|[^=]=[^=]|\+\+|--/;
+
+/** Match any number of comments and whitespace. */
+const reComments = '\\s*(//[^\n]*\n\\s*|/\\*[^*]*(\\*[^*/][^*]*)*\\*/\\s*)*';
+
+const reBlock = new RegExp(reComments + '\\{');
+
+/** Match an else statement after an if block. */
+const reElse = new RegExp(reComments + 'else' + reComments + '(if|\\{)');
+
 interface TranslateState {
+
+	/** String of code to parse. */
+	text: string;
 
 	/** Import record for code to translate. */
 	record: Record;
 
 	/** Nesting depth inside curly brace delimited blocks. */
 	depth: number;
+	captureDepth?: number;
+	captureStart?: number;
+	captureEnd?: number;
+
+	last?: number;
+	pos?: number;
 
 }
 
@@ -67,7 +87,6 @@ function skipRegExp(text: string, pos: number) {
 	const len = text.length;
 	/** Flag whether current char is inside a character class. */
 	let inClass = false;
-const orig = pos;
 
 	while(pos < len) {
 		switch(text.charAt(++pos)) {
@@ -99,64 +118,170 @@ const orig = pos;
 	return(-1);
 }
 
-/** Check if the keyword usage is specific to a module format.
+function parseSyntax(reToken: RegExp, state: TranslateState, handler: any) {
+	const err = 'Parse error';
+	const text = state.text;
+	let depth = state.depth;
+	let match: RegExpExecArray | null;
+	/** Latest matched token. */
+	let token: string;
+	let last: number;
+	let pos: number;
+
+	// Loop through all interesting tokens in the input string.
+	while((match = reToken.exec(text))) {
+		token = match[0];
+		last = match.index;
+
+		switch(token) {
+			case '(': case '{': case '[':
+
+				if(++depth == state.captureDepth) {
+					state.captureStart = last;
+				}
+				continue;
+
+			case ')': case '}': case ']':
+
+				if(depth-- == state.captureDepth) {
+					state.captureEnd = last + 1;
+					state.captureDepth = -1;
+					state.depth = depth;
+					state.last = last;
+					handler(token, state);
+				}
+				continue;
+
+			case '//':
+			case '/*':
+
+				// Skip a comment. Find and jump past the end token.
+				token = (token == '//') ? '\n' : '*/';
+				last = text.indexOf(token, last + 2);
+
+				if(last < 0) {
+					if(token == '\n') return;
+
+					// Unterminated comments are errors.
+					throw(new Error(err));
+				}
+
+				break;
+
+			case '/':
+
+				// Test if the slash begins a regular expression.
+				pos = Math.max(last - chunkSize, 0);
+
+				if(!reBeforeRegExp.test(text.substr(pos, last - pos))) {
+					continue;
+				}
+
+				last = skipRegExp(text, last);
+
+				// Unterminated regular expressions are errors.
+				if(last < 0) {
+					throw(new Error(err));
+				}
+
+				break;
+
+			case '"': case "'": case '`':
+
+				// Skip a string.
+				do {
+					// Look for a matching quote.
+					last = text.indexOf(token, last + 1);
+
+					// Unterminated strings are errors.
+					if(last < 0) {
+						throw(new Error(err));
+					}
+
+					// Count leading backslashes. An odd number escapes the quote.
+					pos = last;
+					while(text.charAt(--pos) == '\\') {}
+
+					// Loop until a matching unescaped quote is found.
+				} while(!(last - pos & 1))
+
+				break;
+
+			default:
+
+				// Handle matched keywords. Examine what follows them.
+				pos = last + token.length;
+
+				// Ensure token is not part of a longer token (surrounding
+				// characters should be invalid in keyword and identifier names).
+				if(
+					(sep[text.charAt(last - 1)] || !last) &&
+					(sep[text.charAt(pos)] || pos >= text.length)
+				) {
+					state.depth = depth;
+					state.last = last;
+					state.pos = pos;
+					handler(token, state);
+				}
+
+				continue;
+		}
+
+		// Jump ahead in input string if a comment, string or regexp was skipped.
+		reToken.lastIndex = last + token.length;
+	}
+}
+
+const formatTbl: { [token: string]: [
+	/** Module format suggested by the token. */
+	ModuleFormat,
+	/** Flag whether detection is certain enough to stop parsing. */
+	boolean,
+	/** Immediately following content must match to trigger detection. */
+	RegExp,
+	/** Immediately preceding content must NOT match or format is blacklisted for this file! */
+	RegExp | null
+] } = {
+	// AMD modules contain calls to the define function.
+	'define': [ 'amd', true, reCallLiteral, reSet ],
+	'System': [ 'system', true, reRegister, reSet ],
+	// require suggests CommonJS, but AMD also supports require()
+	// so keep trying to detect module type.
+	'require': [ 'cjs', false, reCallString, null ],
+	// CommonJS modules use exports or module.exports.
+	// AMD may use them, but a surrounding define should come first.
+	'module': [ 'cjs', true, reModuleExports, null ],
+	'exports': [ 'cjs', true, reExports, null ]
+};
+
+/** Check if keyword presence indicates a specific module format.
   *
   * @param token Keyword to analyze.
-  * @param chunk Some input immediately after the token, for quickly testing
-  * regexp matches at the specific location.
   * @return True if module format was detected, false otherwise. */
 
-function guessFormat(token: string, text: string, last: number, pos: number, state: TranslateState) {
-	const chunkAfter = text.substr(pos, chunkSize);
+function guessFormat(token: string, state: TranslateState) {
+	const format = formatTbl[token];
 
-	if(token == 'define' && !state.record.formatBlacklist['amd']) {
+	if(format && !state.record.formatBlacklist[format[0]]) {
+		const text = state.text;
+		const last = state.last!;
 		const len = Math.min(last, chunkSize);
+
+		// Get some input immediately before and after the token,
+		// for quickly testing regexp matches.
+		const chunkAfter = text.substr(state.pos!, chunkSize);
 		const chunkBefore = text.substr(last - len, len);
 
-		if(reSet.test(chunkBefore)) {
-			// Redefining the define function makes known AMD usage unlikely.
-			state.record.formatBlacklist['amd'] = true;
+		if(format[3] && format[3]!.test(text.substr(last - len, len))) {
+			// Redefining the module syntax makes known usage patterns unlikely.
+			state.record.formatBlacklist[format[0]] = true;
 			return(false);
 		}
 
-		if(reCallLiteral.test(chunkAfter)) {
-			// AMD modules contain calls to the define function.
-			state.record.format = 'amd';
-			return(true);
+		if(format[2].test(chunkAfter)) {
+			state.record.format = format[0];
+			return(format[1]);
 		}
-	}
-
-	if(token == 'System' && !state.record.formatBlacklist['system']) {
-		const len = Math.min(last, chunkSize);
-		const chunkBefore = text.substr(last - len, len);
-
-		if(reSet.test(chunkBefore)) {
-			// Redefining the System variable makes known System.register usage unlikely.
-			state.record.formatBlacklist['system'] = true;
-			return(false);
-		}
-
-		if(reRegister.test(chunkAfter)) {
-			state.record.format = 'system';
-			return(true);
-		}
-	}
-
-	if(token == 'require' && reCallString.test(chunkAfter)) {
-		// CommonJS is likely, but AMD also supports require()
-		// so keep trying to detect module type.
-		state.record.format = 'cjs';
-		return(false);
-	}
-
-	if(
-		(token == 'module' && reModuleExports.test(chunkAfter)) ||
-		(token == 'exports' && reExports.test(chunkAfter))
-	) {
-		// CommonJS modules use exports or module.exports.
-		// AMD may use them, but a surrounding define should come first.
-		state.record.format = 'cjs';
-		return(true);
 	}
 
 	if((token == 'import' || token == 'export') && !state.depth) {
@@ -172,33 +297,17 @@ function guessFormat(token: string, text: string, last: number, pos: number, sta
 export class JS extends Loader {
 
 	/** Detect module format (AMD, CommonJS or ES) and report all CommonJS dependencies.
-	 * Optimized for speed. */
+	  * Optimized for speed. */
 
 	discover(record: Record) {
-		const err = 'Parse error';
-
 		/** Match string or comment start tokens, curly braces and some keywords. */
-		let reToken = matchTokens('module|require|define|System|import|exports?');
-
-		let last: number;
-		let pos: number;
-
-		/** Latest matched token. */
-		let token: string;
-
-		let state: TranslateState = {
-			record,
-			depth: 0
-		};
+		let reToken = matchTokens('module|require|define|System|import|exports?|if|NODE_ENV');
 
 		/** Finished trying to detect the module format? */
 		let formatKnown = false;
 
 		/** CommonJS style require call. Name can be remapped if used inside AMD. */
 		let requireToken = 'require';
-
-		let chunkBefore: string;
-		let chunkAfter: string;
 
 		let text = record.sourceCode;
 
@@ -208,126 +317,196 @@ export class JS extends Loader {
 		if(match) {
 			// Remove the header.
 			text = text.substr(match[0].length);
-			record.sourceCode = text;
 
 			// Anything meant to run as a script is probably CommonJS,
 			// but keep trying to detect module type anyway.
 			if(!formatKnown) record.format = 'cjs';
 		}
 
-		// Loop through all interesting tokens in the input string.
-		while((match = reToken.exec(text))) {
-			token = match[0];
-			last = match.index;
+		const state: TranslateState = {
+			text,
+			record,
+			depth: 0,
+			captureDepth: -1
+		};
 
-			switch(token) {
-				case '{':
+		const enum ConditionMode {
+			/** Not inside any interesting "if" statements. */
+			NONE = 0,
+			/** Inside the conditions of an "if" statement. */
+			CONDITION,
+			/** Inside "if" statement conditions, NODE_ENV constant seen. */
+			STATIC_CONDITION,
+			/** Inside a conditionally compiled block to be left in place. */
+			ALIVE_BLOCK,
+			/** Inside a conditionally compiled block to eliminate. */
+			DEAD_BLOCK
+		}
 
-					// Track nesting to detect top-level import / export.
-					++state.depth;
-					continue;
+		let mode = ConditionMode.NONE;
+		/** Start offset of "if" statement condition. */
+		let conditionStart = 0;
+		/** Flag whether any block seen so far in a set of conditionally
+		  * compiled if-else statements was not eliminated. */
+		let wasAlive = false;
 
-				case '}':
+		const patches: [ number, number, number, number ][] = [];
 
-					--state.depth;
-					continue;
+		parseSyntax(reToken, state, (token: string, state: TranslateState) => {
+			// Detect "if" statements not nested inside conditionally compiled blocks
+			// (which is still unsupported, would need a state stack here).
 
-				case '//':
-				case '/*':
+			if(token == 'if' && state.captureDepth! < 0) {
+				conditionStart = state.last!;
 
-					// Skip a comment. Find and jump past the end token.
-					token = (token == '//') ? '\n' : '*/';
-					last = text.indexOf(token, last + 2);
+				if(mode == ConditionMode.NONE) {
+					wasAlive = false;
+				}
 
-					if(last < 0) {
-						if(token == '\n') return;
-
-						// Unterminated comments are errors.
-						throw(new Error(err));
-					}
-
-					break;
-
-				case '/':
-
-					// Test if the slash begins a regular expression.
-					pos = Math.max(last - chunkSize, 0);
-					chunkBefore = text.substr(pos, last - pos);
-
-					if(!reBeforeRegExp.test(chunkBefore)) {
-						continue;
-					}
-
-					last = skipRegExp(text, last);
-
-					// Unterminated regular expressions are errors.
-					if(last < 0) {
-						throw(new Error(err));
-					}
-
-					break;
-
-				case '"':
-				case "'":
-				case '`':
-
-					// Skip a string.
-					do {
-						// Look for a matching quote.
-						last = text.indexOf(token, last + 1);
-
-						// Unterminated strings are errors.
-						if(last < 0) {
-							throw(new Error(err));
-						}
-
-						// Count leading backslashes. An odd number escapes the quote.
-						pos = last;
-						while(text.charAt(--pos) == '\\') {}
-
-						// Loop until a matching unescaped quote is found.
-					} while(!(last - pos & 1))
-
-					break;
-
-				default:
-
-					// Handle matched keywords. Examine what follows them.
-					pos = last + token.length;
-
-					// Ensure token is not part of a longer token (surrounding
-					// characters are invalid in keyword and identifier names).
-					if(
-						(last > 0 && !sep[text.charAt(last - 1)]) ||
-						(pos < text.length - 1 && !sep[text.charAt(pos)])
-					) {
-						continue;
-					}
-
-					if(!formatKnown) {
-						formatKnown = guessFormat(token, text, last, pos, state);
-					}
-
-					if(
-						token == requireToken &&
-						(state.record.format == 'amd' || state.record.format == 'cjs')
-					) {
-						chunkAfter = text.substr(pos, chunkSize);
-
-						match = reCallString.exec(chunkAfter);
-
-						if(match && match[1] == match[3]) {
-							// Called with a string surrounded in matching quotations.
-							record.addDep(match[2]);
-						}
-					}
-
-					continue;
+				mode = ConditionMode.CONDITION;
+				// Capture the "if" statement conditions.
+				state.captureDepth = state.depth + 1;
 			}
 
-			// Jump ahead in input string if a comment, string or regexp was skipped.
-			reToken.lastIndex = last + token.length;
+			if(token == 'NODE_ENV' && mode == ConditionMode.CONDITION) {
+				mode = ConditionMode.STATIC_CONDITION;
+			}
+
+			// Handle end of captured "if" statement conditions (closing paren
+			// tokens are only emitted when nesting depth matches captureDepth,
+			// only set when parsing "if" statements).
+
+			if(token == ')') {
+				// Ensure a NODE_ENV constant was seen and a block delimited
+				// by curly braces follows (parsing individual expressions
+				// is still unsupported).
+
+				if(
+					mode == ConditionMode.STATIC_CONDITION &&
+					reBlock.test(text.substr(state.captureEnd!, chunkSize))
+				) {
+					if(wasAlive) {
+						// If a previous block among the if-else statements
+						// was not eliminated, all following "else" blocks
+						// must be.
+
+						mode = ConditionMode.DEAD_BLOCK;
+						state.captureDepth = state.depth + 1;
+					} else {
+						// Stop conditional compilation if an error occurs.
+						mode = ConditionMode.NONE;
+
+						/** Condition extracted from latest "if" statement. */
+						const condition = text.substr(
+							state.captureStart!,
+							state.captureEnd! - state.captureStart!
+						);
+
+						// Ensure the condition clearly has no side effects
+						// and try to evaluate it.
+
+						if(!reCallAssign.test(condition)) try {
+							// Prepare to handle an alive or dead block based
+							// on the conditions.
+							mode = (0, eval)(
+								'(function(process){return' + condition + '})'
+							)(record.globalTbl.process) ? ConditionMode.ALIVE_BLOCK : ConditionMode.DEAD_BLOCK;
+
+							// If no errors were thrown, capture the following
+							// curly brace delimited block.
+							state.captureDepth = state.depth + 1;
+						} catch(err) {}
+					}
+				} else {
+					mode = ConditionMode.NONE;
+				}
+			}
+
+			// Handle a just captured, conditionally compiled curly brace
+			// delimited block.
+
+			if(token == '}' && mode != ConditionMode.NONE) {
+				const alive = mode == ConditionMode.ALIVE_BLOCK;
+				wasAlive = wasAlive || alive;
+
+				let patchStart = state.captureStart! + 1;
+				const patchEnd = state.captureEnd! - 1;
+
+				if(alive) {
+					// Set mode for next block in case of an "else" statement.
+					mode = ConditionMode.DEAD_BLOCK;
+				} else {
+					// Prepare for an "else" statement.
+					if(!wasAlive) mode = ConditionMode.ALIVE_BLOCK;
+					// Set start = end to clear block contents.
+					patchStart = patchEnd;
+				}
+
+				// Patch the code to match conditions.
+				patches.push([
+					// Beginning of latest "if" or "else" statement.
+					conditionStart,
+					// Replace with if(0) or if(1).
+					+alive,
+					patchStart,
+					patchEnd
+				]);
+
+				/** Match a following "else" statement followed by an "if" or
+				  * curly brace delimited block. */
+				const elseMatch = text.substr(state.captureEnd!, chunkSize).match(reElse);
+
+				if(elseMatch) {
+					conditionStart = state.captureEnd! + elseMatch[0].length - 1;
+					state.captureDepth = state.depth + 1;
+				} else {
+					mode = ConditionMode.NONE;
+				}
+			}
+
+			// Disregard eliminated code in module format and dependency detection.
+			if(mode == ConditionMode.DEAD_BLOCK) return;
+
+			if(!formatKnown) {
+				formatKnown = guessFormat(token, state);
+			}
+
+			if(
+				token == requireToken &&
+				(state.record.format == 'amd' || state.record.format == 'cjs')
+			) {
+				const chunkAfter = text.substr(state.pos!, chunkSize);
+
+				match = reCallString.exec(chunkAfter);
+
+				if(match && match[1] == match[3]) {
+					// Called with a string surrounded in matching quotations.
+					record.addDep(match[2]);
+				}
+			}
+		});
+
+		// Apply patches from conditional compilation.
+
+		if(patches.length) {
+			let result = '';
+			let pos = 0;
+
+			for(let patch of patches) {
+				result += (
+					text.substr(pos, patch[0] - pos) +
+					'if(' + patch[1] + ') {' +
+					text.substr(patch[2], patch[3] - patch[2]) +
+					'}'
+				);
+
+				pos = patch[3] + 1;
+			}
+
+			text = result + text.substr(pos);
 		}
+
+		record.sourceCode = text;
 	}
 
 }
