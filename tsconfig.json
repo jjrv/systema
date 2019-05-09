@@ -4,12 +4,17 @@
 		"declaration": true,
 		"declarationDir": "../dist/esm",
 		"importHelpers": true,
-		"lib": [ "dom", "es5", "es2015.collection", "es2015.promise" ],
+		"lib": [
+			"dom",
+			"es5",
+			"es2015.collection",
+			"es2015.promise"
+		],
 		"module": "commonjs",
 		"moduleResolution": "node",
 		"noImplicitAny": true,
 		"noImplicitThis": true,
-		"outDir": "../dist/cjs",
+		"outDir": "dist/cjs",
 		"removeComments": false,
 		"sourceMap": false,
 		"strictFunctionTypes": true,
@@ -17,6 +22,6 @@
 		"target": "es5"
 	},
 	"files": [
-		"index.ts"
+		"src/index.ts"
 	]
 }

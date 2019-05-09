@@ -11,7 +11,7 @@ export type Loader = typeof loader;
 
 export interface LoaderConfig {
 	baseURL?: string;
-	plugins?: { [name: string]: Loader };
+	plugins?: { [name: string]: any };
 	registry?: { [name: string]: any };
 }
 
