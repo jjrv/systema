@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+
+<head>
+
+    <title>systema sandbox</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+
+    <script src="dist/umd/index.js"></script>
+    <script>
+
+        let loader = new System();
+
+        loader.import('./example/AssemblyScript-browser.ts')
+            .then(({ AssemblyScript }) => {
+                loader = new System({
+                    plugins: {
+                        'asm.ts': { instantiate: AssemblyScript.prototype.instantiate },
+                    }
+                });
+
+                loader.import('./example/wasm-example.ts');
+            });
+
+    </script>
+</head>
+
+<body>
+    <canvas id="canvas"></canvas>
+</body>
+
+</html>

@@ -14,6 +14,7 @@
                 "--nolazy",
                 "-r",
                 "ts-node/register",
+                "--expose-wasm",
                 "${workspaceRoot}/example/node.ts"
             ],
             "sourceMaps": true,

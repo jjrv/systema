@@ -5,6 +5,16 @@ import { Record, DepRef, ModuleFormat } from './Record';
 import { isNode, origin } from './platform';
 import { fetch, FetchResponse } from './fetch';
 import { LoaderConfig, getDir, SystemDeclaration } from './LoaderBase';
+import { NodeResolve } from './plugin/NodeResolve';
+import { JS } from './plugin/JS';
+import { AMD } from './plugin/AMD';
+import { CSS } from './plugin/CSS';
+import { Text } from './plugin/Text';
+import { CJS } from './plugin/CJS';
+import { Register } from './plugin/Register';
+import { TS } from './plugin/TS';
+import { Json } from './plugin/Json';
+import { NodeBuiltin } from './plugin/NodeBuiltin';
 
 const emptyPromise = Promise.resolve();
 
@@ -80,10 +90,42 @@ function fetchTranslate(loader: Loader, instantiate: boolean, importKey: string,
 	return(result);
 }
 
+const defaultPlugins = {
+	resolve: NodeResolve.prototype,
+
+	js: JS.prototype,
+	amd: AMD.prototype,
+	cjs: CJS.prototype,
+	system: Register.prototype,
+	esm: TS.prototype,
+	ts: TS.prototype,
+	tsx: TS.prototype,
+	'd.ts': TS.prototype,
+	css: CSS.prototype,
+	txt: Text.prototype,
+	json: Json.prototype,
+	node: NodeBuiltin.prototype,
+};
+
+
+const internals = {
+	URL, fetch, FetchResponse
+};
+
+const systema = internals as typeof internals & { System: Loader };
+
+const defaultRegistry = {
+	'@empty': {},
+	systema
+};
+
 export class Loader {
 
 	constructor(public config?: LoaderConfig) {
 		config = config || {};
+
+		config.plugins = Object.assign({}, defaultPlugins, config.plugins || {});
+		config.registry = Object.assign({}, defaultRegistry, config.registry || {});
 
 		this.cwd = (
 			(origin && getDir(window.location.pathname)) ||

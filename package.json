@@ -43,6 +43,7 @@
   "devDependencies": {
     "@types/blue-tape": "^0.1.32",
     "@types/node": "^11.11.3",
+    "assemblyscript": "github:AssemblyScript/assemblyscript",
     "autoroll": "^0.2.0",
     "blue-tape": "^1.0.0",
     "nyc": "^14.1.0",

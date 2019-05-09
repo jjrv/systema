@@ -1,3 +1,10 @@
 import { System } from '../src';
+import { AssemblyScript } from './AssemblyScript-node';
 
-System.import('./node-target.ts');
+const loader = new System({
+    plugins: {
+        'asm.ts': { instantiate: AssemblyScript.prototype.instantiate },
+    }
+});
+
+loader.import('./node-target.ts');
